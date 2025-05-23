@@ -1,34 +1,75 @@
 import type { WordPair } from "@/types/wordPair"
-import type { FC } from "react"
-import {stringToColor} from "@/utils/stringToColor.ts";
+import { useImperativeHandle, useState } from "react"
+import { WordPlaceholder } from "@/components/WordPlaceholder.tsx"
+import { WordButton } from "@/components/WordButton.tsx"
+import type { WordSide } from "@/types/wordSide.tsx"
+import { forwardRef } from "react"
+import { pairsCount } from "@/types/consts.ts"
 
 interface WordListProps {
-    side: "left" | "right"
-    count: number
-    pairs: (WordPair | null)[]
-    onClick: (wordPair: WordPair) => void
+    side: WordSide
+    pairs: WordPair[]
+    selectedId?: string | null
+    selectedIndex?: number | null
+    onClick: (id: string, index: number) => void
 }
 
-export const WordList: FC<WordListProps> = ({ side, count, pairs, onClick }) => {
-    const key = side === "left" ? "russian" : "english"
-
-    return (
-        <div className="flex flex-col gap-4">
-            {Array.from({ length: count }).map((_, index) => {
-                const pair = pairs[index]
-                const color = pair ? stringToColor(pair.id) : "#f0f0f0"
-                const style = pair ? { backgroundColor: color } : {}
-                return (
-                    <div
-                        key={index}
-                        onClick={() => pair && onClick(pair)}
-                        className="min-h-[60px] border rounded-lg flex items-center justify-center text-gray-400 cursor-pointer"
-                        style={style}
-                    >
-                        {pair ? pair[key] : null}
-                    </div>
-                )
-            })}
-        </div>
-    )
+export interface WordListRef {
+    deletePair: (id: string, index: number) => void
+    addPair: (pair: WordPair) => void
+    hasWords: () => boolean
 }
+
+export const WordList = forwardRef<WordListRef, WordListProps>(
+    ({ side, pairs, selectedId, selectedIndex, onClick }, ref) => {
+        const [positions, setPositions] = useState<(WordPair | null)[]>(() => {
+            const shuffled = [...pairs]
+                .slice(0, pairsCount)
+                .sort(() => Math.random() - 0.5)
+
+            return Array.from({ length: pairsCount }, (_, i) => shuffled[i] || null)
+        })
+
+        const deletePair = (id: string, targetIndex: number) => {
+            setPositions(prev => {
+                if (prev[targetIndex]?.id !== id) return prev
+                const next = [...prev]
+                next[targetIndex] = null
+                return next
+            })
+        }
+
+        const addPair = (newPair: WordPair) => {
+            setPositions(prev => {
+                const index = prev.findIndex(p => p === null)
+                if (index === -1) return prev
+                const updated = [...prev]
+                updated[index] = newPair
+                return updated
+            })
+        }
+
+        useImperativeHandle(ref, () => ({
+            deletePair,
+            addPair,
+            hasWords: () => positions.some(p => p !== null)
+        }))
+
+        return (
+            <div className="flex flex-col gap-4">
+                {positions.map((pair, index) => (
+                    <WordPlaceholder key={index}>
+                        {pair && (
+                            <WordButton
+                                word={pair[side]}
+                                id={pair.id}
+                                onClick={() => onClick(pair.id, index)}
+                                isSelected={pair.id === selectedId && index === selectedIndex}
+                            />
+                        )}
+                    </WordPlaceholder>
+                ))}
+            </div>
+        )
+    }
+)

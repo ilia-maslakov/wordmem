@@ -1,173 +1,118 @@
-import { useEffect, useState } from "react"
-import { WordCardList } from "@/components/WordCardList"
-import { StatsWidget } from "@/components/StatsWidget"
-import { loadUniqueWordPairs } from "@/lib/loadWordPairs"
-import type { WordPair } from "@/types/wordPair"
-
-const PAIRS = 8
-type WordMatrix = (string | 0 | 1)[]
+import { WordListsBlock, type WordListsBlockRef } from "@/components/WordListsBlock.tsx"
+import type { WordSide } from "@/types/wordSide.tsx"
+import { useEffect, useRef, useState } from "react"
+import type { SelectedPair } from "@/types/selectedPair.ts"
+import { StatsWidget } from "@/components/StatsWidget.tsx"
+import type { Stats } from "@/types/stats.ts"
+import { useLoadWordPairs } from "@/hooks/useLoadWordPairs.ts"
+import { Button } from "@/components/ui/button.tsx"
 
 export const App = () => {
-    const [matrix, setMatrix] = useState<WordMatrix>([])
-    const [pool, setPool] = useState<WordPair[]>([])
-    const [pairMap, setPairMap] = useState<Record<string, WordPair>>({})
-    const [selected, setSelected] = useState<{ pair: WordPair; index: number } | null>(null)
-    const [turn, setTurn] = useState(0)
-    const [loading, setLoading] = useState(true)
-    const [correctCount, setCorrectCount] = useState(0)
-    const [finished, setFinished] = useState(false)
+    const [stats, setStats] = useState<Stats>({ correctCount: 0, turn: 0, totalCount: null })
+    const [selected, setSelected] = useState<SelectedPair | null>(null)
+    const ref = useRef<WordListsBlockRef | null>(null)
 
-    useEffect(() => {
-        const load = async () => {
-            const all = await loadUniqueWordPairs(PAIRS + 5)
-            const initPairs = all.slice(0, PAIRS)
+    const { loading, error, setPairs, pairs, refetch } = useLoadWordPairs(10)
 
-            const shuffled = [...initPairs].sort(() => Math.random() - 0.5)
-            const initialMatrix: WordMatrix = [...initPairs.map(p => p.id), ...shuffled.map(p => p.id)]
-
-            const mapping: Record<string, WordPair> = {}
-            all.forEach(p => {
-                mapping[p.id] = p
-            })
-
-            setMatrix(initialMatrix)
-            setPairMap(mapping)
-            const initialPool = all.slice(PAIRS)
-            console.log("🔢 Initial pool size:", initialPool.length)
-            setPool(initialPool)
-            setLoading(false)
-        }
-
-        load()
-    }, [])
-
-    const promoteZeros = () => {
-        setMatrix(prev => {
-            if (!prev.includes(0)) return prev
-            return prev.map(v => (v === 0 ? 1 : v))
-        })
+    const reloadGame = () => {
+        setSelected(null)
+        setStats({ correctCount: 0, turn: 0, totalCount: null })
+        refetch()
     }
 
-    const handleCorrectMatch = (matchedId: string) => {
-        setMatrix(prev => {
-            const next = [...prev]
-            console.log("🔁 MATCH", matchedId)
-            console.log("Matrix before:", prev)
-
-            for (let i = 0; i < next.length; i++) {
-                if (next[i] === matchedId) {
-                    next[i] = 0
-                    console.log(`🧹 Slot ${i} cleared`)
-                }
-            }
-
-            if (next.includes(1) && pool.length > 0) {
-                const newPair = pool[0]
-                setPool(p => {
-                    const updated = p.slice(1)
-                    console.log("📉 Pool size after replacement:", updated.length)
-                    return updated
-                })
-
-                const replaced = next.map(v => (v === 1 ? newPair.id : v))
-                console.log("♻️ Replacing 1s with", newPair.id)
-                console.log("Matrix after:", replaced)
-
-                if (replaced.every(v => typeof v === "number" && v === 1) && pool.length === 1) {
-                    setFinished(true)
-                    console.log("🏁 Game finished (after replacement)")
-                }
-
-                return replaced as WordMatrix
-            }
-
-            if (next.includes(0)) {
-                const updated = next.map(v => (v === 0 ? 1 : v))
-                console.log("🟡 Promoting 0 → 1")
-                console.log("Matrix after:", updated)
-
-                if (updated.every(v => v === 1) && pool.length === 0) {
-                    setFinished(true)
-                    console.log("🏁 Game finished (after promotion)")
-                }
-
-                return updated
-            }
-
-            if (!next.includes(0) && !next.includes(1) && pool.length > 0) {
-                const newPair = pool[0]
-                setPool(p => {
-                    const updated = p.slice(1)
-                    console.log("📉 Pool size after fallback:", updated.length)
-                    return updated
-                })
-
-                let inserted = 0
-                const replaced = next.map(v => {
-                    if ((v === 0 || v === 1) && inserted < 2) {
-                        inserted++
-                        return newPair.id
-                    }
-                    return v
-                })
-
-                console.log("🧩 Fallback replacement — filled blanks with", newPair.id)
-                console.log("Matrix after:", replaced)
-
-                return replaced as WordMatrix
-            }
-
-            if (next.every(v => v === 1) && pool.length === 0) {
-                setFinished(true)
-                console.log("🏁 Game finished (final check)")
-            }
-
-            console.log("✅ Matrix unchanged:", next)
-            return next
-        })
-    }
-
-    const handleWordClick = (pair: WordPair, side: "left" | "right") => {
-        const indexOffset = side === "right" ? PAIRS : 0
-        const slotList = side === "right" ? matrix.slice(PAIRS) : matrix.slice(0, PAIRS)
-        const index = slotList.findIndex(v => typeof v === "string" && v === pair.id)
-
-        if (index === -1) return
-        const matrixIndex = index + indexOffset
-
-        console.log("🖱 Клик:", pair.id, "в позиции", matrixIndex)
-
+    const handleWordClick = (id: string, side: WordSide, index: number) => {
         if (!selected) {
-            setSelected({ pair, index: matrixIndex })
+            setSelected({ side, id, index })
             return
         }
 
-        if (selected.pair.id === pair.id && selected.index !== matrixIndex) {
-            setCorrectCount(c => c + 1)
-            handleCorrectMatch(pair.id)
+        if (selected.side === side) {
+            if (selected.id === id) {
+                setSelected(null)
+            } else {
+                setSelected({ side, id, index })
+            }
+            return
         }
 
         setSelected(null)
-        setTurn(t => t + 1)
-        promoteZeros()
+
+        if (selected.id === id) {
+            const firstIndex = selected.side === "russian" ? selected.index : index
+            const secondIndex = selected.side === "russian" ? index : selected.index
+            ref.current?.deletePair(id,  firstIndex, secondIndex)
+
+            setPairs(prev => {
+                const sorted = [...prev].sort((a, b) => a.shows - b.shows).filter(pair => pair.shows > 0)
+                const pairToShowIndex = sorted.length - 1
+                const pairToShow = sorted[pairToShowIndex]
+                if (!pairToShow) return prev
+
+                const updatedPairToShow = { ...pairToShow, shows: pairToShow.shows - 1 }
+
+                ref.current?.addPair(updatedPairToShow)
+
+                return [
+                    ...prev.filter(pair => pair.id !== pairToShow.id),
+                    updatedPairToShow
+                ]
+            })
+
+            setStats(prev => ({
+                ...prev,
+                correctCount: prev.correctCount + 1,
+                turn: prev.turn + 1
+            }))
+            return
+        }
+
+        setStats(prev => ({
+            ...prev,
+            correctCount: prev.correctCount,
+            turn: prev.turn + 1
+        }))
     }
 
-    if (loading) {
-        return <div className="text-center py-10">Загрузка...</div>
-    }
+    useEffect(() => {
+        if (stats.totalCount || !pairs.length) return
 
-    if (finished) {
-        return <StatsWidget correct={correctCount} total={turn} />
-    }
+        const totalCount = pairs.reduce((acc, pair) => acc + pair.shows, 0)
+        setStats({ ...stats, totalCount })
+    }, [pairs, stats, loading, error])
 
-    const left = matrix.slice(0, PAIRS).map(v => (typeof v === "string" ? pairMap[v] : null))
-    const right = matrix.slice(PAIRS).map(v => (typeof v === "string" ? pairMap[v] : null))
+    const [hasWords, setHasWords] = useState(true)
+
+    useEffect(() => {
+        if (ref.current?.hasWords) {
+            setHasWords(ref.current.hasWords())
+        }
+    }, [pairs, stats.turn])
+
+    if (loading) return <div className="flex items-center justify-center h-screen">Loading...</div>
+    if (error) return <div className="flex items-center justify-center h-screen">Error</div>
 
     return (
-        <WordCardList
-            left={left}
-            right={right}
-            onWordClick={handleWordClick}
-        />
+        <div>
+            <div className="flex flex-col items-center justify-center mt-6 mb-1">
+                <h2 className="text-lg font-bold text-gray-800">🧩 Сопоставление пар</h2>
+            </div>
+
+            <WordListsBlock
+                pairs={pairs}
+                onWordClick={handleWordClick}
+                selected={selected}
+                ref={ref}
+            />
+
+            { !hasWords && (
+                <div className="flex justify-center">
+                    <Button className="px-10 py-2 text-base mt-1" onClick={reloadGame}>
+                        Начать заново
+                    </Button>
+                </div>
+            )}
+
+            <StatsWidget stats={stats} hasWords={hasWords} />
+        </div>
     )
 }

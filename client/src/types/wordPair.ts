@@ -3,4 +3,5 @@ export type WordPair = {
     russian: string
     english: string
     category: string
+    shows: number
 }
