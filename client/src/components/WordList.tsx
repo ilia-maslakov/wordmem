@@ -1,5 +1,5 @@
 import type { WordPair } from "@/types/wordPair"
-import { useEffect, useImperativeHandle, useRef, useState } from "react"
+import { useImperativeHandle, useRef, useState } from "react"
 import { WordPlaceholder } from "@/components/WordPlaceholder.tsx"
 import { WordButton, type WordButtonRef } from "@/components/WordButton.tsx"
 import type { WordSide } from "@/types/wordSide.tsx"
@@ -106,7 +106,9 @@ export const WordList = forwardRef<WordListRef, WordListProps>(
                     <WordPlaceholder key={idx}>
                         {pair && (
                             <WordButton
-                                ref={r => (btnRefs.current[idx] = r)}
+                                ref={(r) => {
+                                    btnRefs.current[idx] = r      // сохранили ссылку
+                                }}
                                 word={pair[side]}
                                 id={pair.id}
                                 onClick={() => onClick(pair.id, idx)}
