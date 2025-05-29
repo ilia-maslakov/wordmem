@@ -118,3 +118,27 @@
     @apply bg-background text-foreground;
   }
 }
+
+@layer utilities {
+  @keyframes fog-fade-in {
+    0% {
+      opacity: 0;
+      filter: blur(8px);
+      pointer-events: none;
+    }
+    40% {
+      opacity: 0.4;
+      filter: blur(4px);
+      pointer-events: none; /* 🔒 всё время */
+    }
+    100% {
+      opacity: 1;
+      filter: blur(0);
+      pointer-events: auto; /* ✅ включить в самом конце */
+    }
+  }
+
+  .animate-slow-then-fast {
+    animation: fog-fade-in 2.5s linear forwards;
+  }
+}
