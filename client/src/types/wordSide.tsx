@@ -1,1 +1,1 @@
-export type WordSide = "russian" | "english"
+export type WordSide = "russian" | "english";

@@ -1,7 +1,7 @@
-import type {WordSide} from "@/types/wordSide.tsx";
+import type { WordSide } from "@/types/wordSide.tsx";
 
 export type SelectedPair = {
-    id: string
-    side: WordSide
-    index: number
-}
+  id: string;
+  side: WordSide;
+  index: number;
+};
